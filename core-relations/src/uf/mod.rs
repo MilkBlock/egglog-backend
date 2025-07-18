@@ -54,7 +54,9 @@ type UnionFind = union_find::UnionFind<Value>;
 /// decisions are made internally, so there may not literally be a row added
 /// with this value.
 pub struct DisplacedTable {
+    // 存储关系
     uf: UnionFind,
+    //  应该存储的是所有节点的 Value 和 TS
     displaced: Vec<(Value, Value)>,
     changed: bool,
     lookup_table: HashMap<Value, RowId>,

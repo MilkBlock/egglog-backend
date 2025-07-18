@@ -418,26 +418,150 @@ macro_rules! pool_set {
 // anything of that type to be allocated using `with_pool_set`, and `bytes` is a per-type limit on
 // the total bytes that can be buffered in a single (per-thread) memory pool.
 
-pool_set! {
-    pub PoolSet {
-        vec_vals: Vec<Value> [ 1 << 25 ],
-        vec_cell_vals: Vec<Cell<Value>> [ 1 << 25 ],
-        // TODO: work on scaffolding/DI/etc. so that we can share allocations
-        // between vec_vals and shared_vals.
-        rows: Vec<RowId> [ 1 << 25 ],
-        offset_vec: SortedOffsetVector [ 1 << 20 ],
-        column_index: IndexMap<Value, BufferedSubset> [ 1 << 20 ],
-        constraints: Vec<Constraint> [ 1 << 20 ],
-        bitsets: FixedBitSet [ 1 << 20 ],
-        instrs: Vec<Instr> [ 1 << 20 ],
-        frame_updates: FrameUpdate [ 1 << 25 ],
-        frame_update_vecs: Vec<Pooled<FrameUpdate>> [ 1 << 20 ],
-        tuple_indexes: HashTable<TableEntry<BufferedSubset>> [ 1 << 20 ],
-        staged_outputs: HashTable<SwTableEntry> [ 1 << 25 ],
-        predicted_vals: PredictedVals [ 1 << 20 ],
-        shard_hist: DenseIdMap<ShardId, usize> [ 1 << 20 ],
-        instr_indexes: Vec<u32> [ 1 << 20 ],
-        cached_subsets: IdVec<ColumnId, std::sync::OnceLock<std::sync::Arc<ColumnIndex>>> [ 4 << 20 ],
+pub struct PoolSet {
+    vec_vals: Pool<Vec<Value>>,
+    vec_cell_vals: Pool<Vec<Cell<Value>>>,
+    rows: Pool<Vec<RowId>>,
+    offset_vec: Pool<SortedOffsetVector>,
+    column_index: Pool<IndexMap<Value, BufferedSubset>>,
+    constraints: Pool<Vec<Constraint>>,
+    bitsets: Pool<FixedBitSet>,
+    instrs: Pool<Vec<Instr>>,
+    frame_updates: Pool<FrameUpdate>,
+    frame_update_vecs: Pool<Vec<Pooled<FrameUpdate>>>,
+    tuple_indexes: Pool<HashTable<TableEntry<BufferedSubset>>>,
+    staged_outputs: Pool<HashTable<SwTableEntry>>,
+    predicted_vals: Pool<PredictedVals>,
+    shard_hist: Pool<DenseIdMap<ShardId, usize>>,
+    instr_indexes: Pool<Vec<u32>>,
+    cached_subsets: Pool<IdVec<ColumnId, std::sync::OnceLock<std::sync::Arc<ColumnIndex>>>>,
+}
+impl Default for PoolSet {
+    fn default() -> Self {
+        PoolSet {
+            vec_vals: Pool::new((1 << 25)),
+            vec_cell_vals: Pool::new((1 << 25)),
+            rows: Pool::new((1 << 25)),
+            offset_vec: Pool::new((1 << 20)),
+            column_index: Pool::new((1 << 20)),
+            constraints: Pool::new((1 << 20)),
+            bitsets: Pool::new((1 << 20)),
+            instrs: Pool::new((1 << 20)),
+            frame_updates: Pool::new((1 << 25)),
+            frame_update_vecs: Pool::new((1 << 20)),
+            tuple_indexes: Pool::new((1 << 20)),
+            staged_outputs: Pool::new((1 << 25)),
+            predicted_vals: Pool::new((1 << 20)),
+            shard_hist: Pool::new((1 << 20)),
+            instr_indexes: Pool::new((1 << 20)),
+            cached_subsets: Pool::new((4 << 20)),
+        }
+    }
+}
+impl PoolSet {
+    pub fn get_pool<T: InPoolSet<Self>>(&self) -> Pool<T> {
+        T::with_pool(self, Pool::clone)
+    }
+    pub fn get<T: InPoolSet<Self> + Default>(&self) -> Pooled<T> {
+        self.get_pool().get()
+    }
+    pub fn clear(&self) {
+        self.vec_vals.clear();
+        self.vec_cell_vals.clear();
+        self.rows.clear();
+        self.offset_vec.clear();
+        self.column_index.clear();
+        self.constraints.clear();
+        self.bitsets.clear();
+        self.instrs.clear();
+        self.frame_updates.clear();
+        self.frame_update_vecs.clear();
+        self.tuple_indexes.clear();
+        self.staged_outputs.clear();
+        self.predicted_vals.clear();
+        self.shard_hist.clear();
+        self.instr_indexes.clear();
+        self.cached_subsets.clear();
+    }
+}
+impl InPoolSet<PoolSet> for Vec<Value> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.vec_vals)
+    }
+}
+impl InPoolSet<PoolSet> for Vec<Cell<Value>> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.vec_cell_vals)
+    }
+}
+impl InPoolSet<PoolSet> for Vec<RowId> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.rows)
+    }
+}
+impl InPoolSet<PoolSet> for SortedOffsetVector {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.offset_vec)
+    }
+}
+impl InPoolSet<PoolSet> for IndexMap<Value, BufferedSubset> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.column_index)
+    }
+}
+impl InPoolSet<PoolSet> for Vec<Constraint> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.constraints)
+    }
+}
+impl InPoolSet<PoolSet> for FixedBitSet {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.bitsets)
+    }
+}
+impl InPoolSet<PoolSet> for Vec<Instr> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.instrs)
+    }
+}
+impl InPoolSet<PoolSet> for FrameUpdate {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.frame_updates)
+    }
+}
+impl InPoolSet<PoolSet> for Vec<Pooled<FrameUpdate>> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.frame_update_vecs)
+    }
+}
+impl InPoolSet<PoolSet> for HashTable<TableEntry<BufferedSubset>> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.tuple_indexes)
+    }
+}
+impl InPoolSet<PoolSet> for HashTable<SwTableEntry> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.staged_outputs)
+    }
+}
+impl InPoolSet<PoolSet> for PredictedVals {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.predicted_vals)
+    }
+}
+impl InPoolSet<PoolSet> for DenseIdMap<ShardId, usize> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.shard_hist)
+    }
+}
+impl InPoolSet<PoolSet> for Vec<u32> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.instr_indexes)
+    }
+}
+impl InPoolSet<PoolSet> for IdVec<ColumnId, std::sync::OnceLock<std::sync::Arc<ColumnIndex>>> {
+    fn with_pool<R>(pool_set: &PoolSet, f: impl FnOnce(&Pool<Self>) -> R) -> R {
+        f(&pool_set.cached_subsets)
     }
 }
 

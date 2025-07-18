@@ -47,10 +47,13 @@ struct VarInfo {
 #[derive(Clone, Debug)]
 pub enum QueryEntry {
     Var {
+        // variable 代表一个匹配的变量，由于一个变量可能会匹配多个Value，所以可以并行执行
         id: Variable,
         name: Option<Box<str>>,
     },
     Const {
+        // 当 ty 填入 ColumnTy::Id 的时候，此项必为 subsumed 或者 not_subsumed 的常量
+        // 因为只有 Record 才能被 subsume
         val: Value,
         // Constants can have a type plumbed through, particularly if they
         // correspond to a base value constant in egglog.
@@ -443,6 +446,7 @@ impl RuleBuilder<'_> {
     /// Add the given table atom to query. As elsewhere in the crate, the last
     /// argument is the "return value" of the function. Can also optionally
     /// check the subsumption bit.
+    /// 如此看来这个函数只是知会一声，告诉 RuleBuilder 啊我这里有个QueryEntry 是由这两个query entry 组成的
     pub fn query_table(
         &mut self,
         func: FunctionId,
@@ -926,6 +930,7 @@ impl RuleBuilder<'_> {
         );
     }
 
+    /// 这个函数的意义是你可以在 subsume_entry 中决定是 NOT_SUBSUMED 还是 SUBSUMED
     pub(crate) fn set_with_subsume(
         &mut self,
         func: FunctionId,

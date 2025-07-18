@@ -79,3 +79,22 @@ fn fill_vec() {
         }
     }
 }
+
+#[test]
+fn fill_vec2() {
+    let ps = PoolSet::default();
+    let mut offs = Vec::from_iter(0..100);
+    let mut mask = Mask::new(0..100, &ps);
+
+    mask.iter(&offs).retain(|x| x % 5 == 0);
+
+    let mut out = Vec::new();
+    mask.iter(&offs).fill_vec(
+        &mut out,
+        || i32::MAX,
+        |idx, x| {
+            println!("{:?}", (idx, x));
+            Some(*x)
+        },
+    );
+}

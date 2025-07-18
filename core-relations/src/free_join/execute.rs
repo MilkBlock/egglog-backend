@@ -147,6 +147,7 @@ impl Database {
             return RuleSetReport::default();
         }
         let preds = with_pool_set(|ps| ps.get::<PredictedVals>());
+        // 用来标记每个action 执行了多少次
         let match_counter = MatchCounter::new(rule_set.actions.n_ids());
 
         let search_and_apply_timer = Instant::now();

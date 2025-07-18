@@ -8,9 +8,11 @@ use std::{
 };
 
 use concurrency::ResettableOnceLock;
+use log::info;
 use numeric_id::{define_id, DenseIdMap, DenseIdMapWithReuse, NumericId};
 use rayon::prelude::*;
 use smallvec::SmallVec;
+use tracing::instrument;
 use web_time::Duration;
 
 use crate::{
@@ -167,7 +169,9 @@ pub fn make_external_func<
     where
         F: Fn(&mut ExecutionState, &[Value]) -> Option<Value> + Clone + Send + Sync,
     {
+        #[instrument(skip(self, state))]
         fn invoke(&self, state: &mut ExecutionState, args: &[Value]) -> Option<Value> {
+            tracing::warn!("wrapped invoke called,{:?}", args);
             (self.0)(state, args)
         }
     }
@@ -181,6 +185,7 @@ pub(crate) trait ExternalFunctionExt: ExternalFunction {
     /// even be able to; some types are private); the default implementation
     /// delegates core logic to `invoke`.
     #[doc(hidden)]
+    #[instrument(skip(self, state))]
     fn invoke_batch(
         &self,
         state: &mut ExecutionState,
@@ -189,6 +194,7 @@ pub(crate) trait ExternalFunctionExt: ExternalFunction {
         args: &[QueryEntry],
         out_var: Variable,
     ) {
+        tracing::warn!("invoke_batch");
         let pool: Pool<Vec<Value>> = with_pool_set(|ps| ps.get_pool().clone());
         let mut out = pool.get();
         out.reserve(mask.len());
@@ -199,7 +205,10 @@ pub(crate) trait ExternalFunctionExt: ExternalFunction {
                 QueryEntry::Const(c) => ValueSource::Const(*c),
             }),
         )
-        .fill_vec(&mut out, Value::stale, |_, args| self.invoke(state, &args));
+        .fill_vec(&mut out, Value::stale, |_, args| {
+            tracing::error!("{args:?}");
+            self.invoke(state, &args)
+        });
         bindings.insert(out_var, out);
     }
 
@@ -209,6 +218,7 @@ pub(crate) trait ExternalFunctionExt: ExternalFunction {
     /// *Panics* This method will panic if `out_var` doesn't already have an appropriately-sized
     /// vector bound in `bindings`.
     #[doc(hidden)]
+    #[instrument(skip(self, state))]
     fn invoke_batch_assign(
         &self,
         state: &mut ExecutionState,
@@ -217,6 +227,7 @@ pub(crate) trait ExternalFunctionExt: ExternalFunction {
         args: &[QueryEntry],
         out_var: Variable,
     ) {
+        tracing::warn!("invoke_batch_assign");
         let pool: Pool<Vec<Value>> = with_pool_set(|ps| ps.get_pool().clone());
         let mut out = bindings
             .take(out_var)
@@ -362,12 +373,15 @@ impl Database {
     /// values in a table like [`crate::SortedWritesTable`] where values in a certain column need
     /// to be inserted in sorted order; the `next_ts` argument to this method is passed to
     /// `apply_rebuild` for this purpose.
+
+    #[instrument(skip(self))]
     pub fn apply_rebuild(
         &mut self,
         func_id: TableId,
         to_rebuild: &[TableId],
         next_ts: Value,
     ) -> bool {
+        tracing::warn!("apply rebuild");
         let func = self.tables.take(func_id).unwrap();
         let predicted = PredictedVals::default();
         if parallelize_db_level_op(self.total_size_estimate) {
@@ -463,7 +477,10 @@ impl Database {
     /// Exposed for testing purposes.
     ///
     /// Useful for out-of-band insertions into the database.
+    #[instrument(skip(self))]
     pub fn merge_all(&mut self) -> bool {
+        tracing::warn!("merge_all");
+
         let mut ever_changed = false;
         let do_parallel = parallelize_db_level_op(self.total_size_estimate);
         loop {

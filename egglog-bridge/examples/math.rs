@@ -143,6 +143,38 @@ fn main() {
             define_rule! {
                 [egraph] ((-> (add x y) id)) => ((set (add y x) id))
             },
+            {
+                let mut ebuilder = egglog_bridge::macros::ExpressionBuilder::default();
+                let mut builder = egraph.new_rule(stringify!(((->(add x y)id) => (set(add y x)id))),true);
+                egglog_bridge::parse_lhs!(ebuilder,builder,[(->(add x y)id)]);
+                egglog_bridge::parse_rhs_command!(ebuilder,builder,[(set(add y x)id)]);
+                builder.build()
+            },
+            {
+                let mut ebuilder = egglog_bridge::macros::ExpressionBuilder::default();
+                let mut builder = egraph.new_rule(stringify!(((->(add x y)id) => (set(add y x)id))),true);
+                let ty = ebuilder.infer_return_type(add.into(), &builder);
+                let ret_var = ebuilder.bind_or_lookup_var(stringify!(id),ty, &mut builder);
+                {
+                    #[allow(clippy::vec_init_then_push)]
+                    {
+                        let mut vec = Vec::<egglog_bridge::QueryEntry>::new();
+                        let ret = ebuilder.get_var(stringify!(x),add,vec.len(), &mut builder);
+                        vec.push(ret.into());
+                        let ret = ebuilder.get_var(stringify!(y),add,vec.len(), &mut builder);
+                        vec.push(ret.into());
+                        ;;
+                        vec.push(ret_var.into());
+                        builder.query_table(add.into(), &vec,Some(false)).unwrap();
+                    }
+                };
+                let mut vec = Vec::<egglog_bridge::QueryEntry>::new();
+                egglog_bridge::parse_rhs_atom_args!(ebuilder,builder,add,vec,[y x]);
+                egglog_bridge::parse_rhs_atom_args!(ebuilder,builder,add,vec,[id]);
+                builder.set(add.into(), &vec);
+                egglog_bridge::parse_rhs_command!(ebuilder,builder,[]);
+                builder.build()
+            },
             define_rule! {
                 [egraph] ((-> (mul x y) id)) => ((set (mul y x) id))
             },
@@ -151,6 +183,37 @@ fn main() {
             },
             define_rule! {
                 [egraph] ((-> (mul x (mul y z)) id)) => ((set (mul (mul x y) z) id))
+            },
+            {
+                let mut ebuilder = egglog_bridge::macros::ExpressionBuilder::default();
+                let mut builder = egraph.new_rule(stringify!(((->(mul x(mul y z))id) => (set(mul(mul x y)z)id))),true);
+                let ty = ebuilder.infer_return_type(mul.into(), &builder);
+                let ret_var = ebuilder.bind_or_lookup_var(stringify!(id),ty, &mut builder);
+                {
+                    #[allow(clippy::vec_init_then_push)]
+                    {
+                        let mut vec = Vec::<egglog_bridge::QueryEntry>::new();
+                        let ret = ebuilder.get_var(stringify!(x),mul,vec.len(), &mut builder);
+                        vec.push(ret.into());
+                        let ret = {
+                            let mut vec = Vec::<egglog_bridge::QueryEntry>::new();
+                            let ret = ebuilder.get_var(stringify!(y),mul,vec.len(), &mut builder);
+                        vec.push(ret.into());
+                        let ret = ebuilder.get_var(stringify!(z),mul,vec.len(), &mut builder);
+                        vec.push(ret.into());
+                            let ty = ebuilder.infer_type(mul.into(),vec.len(), &builder);
+                            let res = builder.new_var_named(ty,stringify!(mul(y z)));
+                            vec.push(res.clone());
+                            builder.query_table(mul.into(), &vec,Some(false)).unwrap();
+                            res
+                        };
+                        vec.push(ret.into());
+                        vec.push(ret_var.into());
+                        builder.query_table(mul.into(), &vec,Some(false)).unwrap();
+                    }
+                };;
+                egglog_bridge::parse_rhs_command!(ebuilder,builder,[(set(mul(mul x y)z)id)]);
+                builder.build()
             },
             define_rule! {
                 [egraph] ((-> (sub x y) id)) => ((set (add x (mul (rat {neg1.clone()}) y)) id))

@@ -195,6 +195,7 @@ impl<'outer, 'a> QueryBuilder<'outer, 'a> {
         })
     }
 
+    /// 通过 MarkUsed 来标记 relation 中用到的部分，如果没用到的话是可以删除的
     fn mark_used<'b>(&mut self, entries: impl IntoIterator<Item = &'b QueryEntry>) {
         for entry in entries {
             if let QueryEntry::Var(v) = entry {
@@ -365,6 +366,7 @@ pub struct RuleBuilder<'outer, 'a> {
 
 impl RuleBuilder<'_, '_> {
     /// Build the finished query.
+    ///  通过 build 函数就可以把 RuleBuilder 托管到 RuleSet 中
     pub fn build(self) -> RuleId {
         self.build_with_description("")
     }

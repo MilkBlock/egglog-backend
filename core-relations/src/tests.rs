@@ -98,6 +98,7 @@ fn basic_query() {
         .unwrap();
     let mut rules = add_query.build();
     let add_a_b = rules.call_external(add_int, &[a.into(), b.into()]).unwrap();
+    // 最后一个value 是代表 sumbsumed
     rules
         .insert(num, &[add_a_b.into(), z.into(), Value::new(1).into()])
         .unwrap();

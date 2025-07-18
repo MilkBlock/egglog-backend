@@ -7,6 +7,7 @@ use std::ops::Deref;
 use numeric_id::{DenseIdMap, NumericId};
 use rayon::iter::{IntoParallelRefMutIterator, ParallelIterator};
 use smallvec::SmallVec;
+use tracing::instrument;
 
 use crate::{
     common::{DashMap, Value},
@@ -286,6 +287,7 @@ impl<'a> ExecutionState<'a> {
     }
 
     /// Call an external function.
+    #[instrument(skip(self))]
     pub fn call_external_func(
         &mut self,
         func: ExternalFunctionId,

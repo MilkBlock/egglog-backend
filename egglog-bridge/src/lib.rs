@@ -30,6 +30,7 @@ use numeric_id::{define_id, DenseIdMap, DenseIdMapWithReuse, NumericId};
 use once_cell::sync::Lazy;
 use proof_spec::{ProofReason, ProofReconstructionState, ReasonSpecId};
 use smallvec::SmallVec;
+use tracing::instrument;
 use web_time::{Duration, Instant};
 
 pub mod macros;
@@ -48,8 +49,8 @@ use thiserror::Error;
 
 #[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub enum ColumnTy {
-    Id,
-    Base(BaseValueId),
+    Id,                // 不是基本类型 Node {val:i64}  Node 就是一个ColumnTy::Id 类型
+    Base(BaseValueId), // 基本类型String i64  Base
 }
 
 define_id!(pub RuleId, u32, "An egglog-style rule");
@@ -96,6 +97,7 @@ impl Default for EGraph {
     }
 }
 
+#[derive(Debug)]
 /// Properties of a function added to an [`EGraph`].
 pub struct FunctionConfig {
     /// The function's schema. The last column in the schema is the return type.
@@ -238,7 +240,7 @@ impl EGraph {
     /// Look up the canonical value for `val` in the union-find.
     ///
     /// If the value has never been inserted into the union-find, `val` is returned.
-    fn get_canon_in_uf(&self, val: Value) -> Value {
+    pub fn get_canon_in_uf(&self, val: Value) -> Value {
         let table = self.db.get_table(self.uf_table);
         let row = table.get_row(&[val]);
         row.map(|row| row.vals[1]).unwrap_or(val)
@@ -607,6 +609,10 @@ impl EGraph {
     }
 
     /// Register a function in this EGraph.
+
+    /// ! 就干了两个事情一个是生成 FunctionInfo，这个是表层的，给前端用的
+    /// ! 另一个是 生成 SortedWritesTable 这个是给后端存储缓存数据用的
+    #[instrument(skip(self))]
     pub fn add_table(&mut self, config: FunctionConfig) -> FunctionId {
         let FunctionConfig {
             schema,
@@ -615,6 +621,7 @@ impl EGraph {
             name,
             can_subsume,
         } = config;
+        tracing::warn!("add table with schema {:?}", schema);
         assert!(
             !schema.is_empty(),
             "must have at least one column in schema"
@@ -637,6 +644,7 @@ impl EGraph {
         let mut write_deps = IndexSet::<TableId>::new();
         merge.fill_deps(self, &mut read_deps, &mut write_deps);
         let merge_fn = merge.to_callback(schema_math, &name, self);
+        // MARK: CreateTable
         let table = SortedWritesTable::new(
             n_args,
             n_cols,
@@ -651,7 +659,9 @@ impl EGraph {
         let res = self.funcs.push(FunctionInfo {
             table: table_id,
             schema: schema.clone(),
+            // rebuild
             incremental_rebuild_rules: Default::default(),
+            // MARK: rebuild 还分 incremental 和 non-incremental
             nonincremental_rebuild_rule: RuleId::new(!0),
             default_val: default,
             can_subsume,
@@ -1038,7 +1048,7 @@ impl FunctionInfo {
 }
 
 /// How defaults are computed for the given function.
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub enum DefaultVal {
     /// Generate a fresh UF id.
     FreshId,
@@ -1049,6 +1059,7 @@ pub enum DefaultVal {
 }
 
 /// How to resolve FD conflicts for a table.
+#[derive(Debug)]
 pub enum MergeFn {
     /// Panic if the old and new values don't match.
     AssertEq,
@@ -1071,6 +1082,9 @@ pub enum MergeFn {
 }
 
 impl MergeFn {
+    /// Union Find Table 是 EGraph 唯一的
+    ///
+    #[instrument(skip(egraph))]
     fn fill_deps(
         &self,
         egraph: &EGraph,
@@ -1078,6 +1092,7 @@ impl MergeFn {
         write_deps: &mut IndexSet<TableId>,
     ) {
         use MergeFn::*;
+        info!("fill_deps ");
         match self {
             Primitive(_, args) => {
                 args.iter()
@@ -1096,6 +1111,7 @@ impl MergeFn {
         }
     }
 
+    #[instrument(skip(egraph))]
     fn to_callback(
         &self,
         schema_math: SchemaMath,
@@ -1106,6 +1122,7 @@ impl MergeFn {
             !egraph.tracing || matches!(self, MergeFn::UnionId),
             "proofs aren't supported for non-union merge functions"
         );
+        tracing::warn!("to callback");
 
         let resolved = self.resolve(function_name, egraph);
 
@@ -1318,9 +1335,10 @@ impl Clone for TableAction {
 impl TableAction {
     /// Create a new `TableAction` to be used later.
     /// This requires access to the `egglog_bridge::EGraph`.
+    #[instrument(skip(egraph))]
     pub fn new(egraph: &EGraph, func: FunctionId) -> TableAction {
         assert!(!egraph.tracing, "proofs not supported yet");
-
+        tracing::warn!("create new TableAction");
         let func_info = &egraph.funcs[func];
         TableAction {
             table: func_info.table,
@@ -1342,7 +1360,9 @@ impl TableAction {
     /// A "table lookup" is not a read-only operation. It will insert a row when
     /// the [`DefaultVal`] for the table is not [`DefaultVal::Fail`] and
     /// the `args` in [`Lookup::run`] are not already present in the table.
+    #[instrument(skip(state))]
     pub fn lookup(&self, state: &mut ExecutionState, key: &[Value]) -> Option<Value> {
+        tracing::warn!("lookup in table");
         match self.default {
             Some(default) => {
                 let timestamp =
@@ -1377,7 +1397,11 @@ impl TableAction {
     }
 
     /// Insert a row into this table.
+    #[instrument(skip(state, row))]
     pub fn insert(&mut self, state: &mut ExecutionState, row: impl Iterator<Item = Value>) {
+        let row = row.collect::<Vec<_>>();
+        tracing::warn!("insert row {:?}", row);
+
         let ts = Value::from_usize(state.read_counter(self.timestamp));
         self.scratch.clear();
         self.scratch.extend(row);
@@ -1394,12 +1418,18 @@ impl TableAction {
     }
 
     /// Delete a row from this table.
+    #[instrument(skip(state))]
     pub fn remove(&self, state: &mut ExecutionState, key: &[Value]) {
+        tracing::warn!("remove in table");
         state.stage_remove(self.table, key);
     }
 
     /// Subsume a row in this table.
+    #[instrument(skip(state, key))]
     pub fn subsume(&mut self, state: &mut ExecutionState, key: impl Iterator<Item = Value>) {
+        let key = key.collect::<Vec<_>>();
+        tracing::warn!("subsume row {:?}", key);
+
         let ts = Value::from_usize(state.read_counter(self.timestamp));
         self.scratch.clear();
         self.scratch.extend(key);
@@ -1440,24 +1470,33 @@ impl UnionAction {
     }
 
     /// Union two values.
+    #[instrument(skip(state))]
     pub fn union(&self, state: &mut ExecutionState, x: Value, y: Value) {
+        tracing::warn!("union");
+
         let ts = Value::from_usize(state.read_counter(self.timestamp));
         state.stage_insert(self.table, &[x, y, ts]);
     }
 }
 
+#[instrument(skip(db, rule_info, rules, next_ts))]
 fn run_rules_impl(
     db: &mut Database,
     rule_info: &mut DenseIdMapWithReuse<RuleId, RuleInfo>,
     rules: &[RuleId],
     next_ts: Timestamp,
 ) -> Result<RuleSetReport> {
+    let mut v = Vec::new();
     for rule in rules {
         let info = &mut rule_info[*rule];
+        v.push(info.desc.clone());
         if info.cached_plan.is_none() {
             info.cached_plan = Some(info.query.build_cached_plan(db, &info.desc)?);
         }
     }
+
+    tracing::warn!("run rules:{:?}", v);
+
     let mut rsb = db.new_rule_set();
     for rule in rules {
         let info = &mut rule_info[*rule];
