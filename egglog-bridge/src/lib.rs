@@ -606,6 +606,11 @@ impl EGraph {
         out.non_stale().for_each(|(_, row)| f(row));
     }
 
+    /// Get TableId by FunctionId
+    pub fn get_table_id(&self, func_id: FunctionId) -> Option<TableId>{
+        Some(self.funcs.get(func_id)?.table)
+    }
+
     /// Register a function in this EGraph.
     pub fn add_table(&mut self, config: FunctionConfig) -> FunctionId {
         let FunctionConfig {
