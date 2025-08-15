@@ -692,7 +692,7 @@ impl DisplacedTableWithProvenance {
             let dot_string = format!("{:?}", Dot::with_config(&g, &graph_config));
             f.write_all(dot_string.as_bytes()).expect("写入失败");
         }
-        generate_dot_by_graph(&self.proof_graph, "proof_graph".to_string(), &[]);
+        generate_dot_by_graph(&self.proof_graph, "proof_graph.dot".to_string(), &[]);
 
         let costs = dijkstra(&self.proof_graph, self.node_map[&l], Some(goal), |edge| {
             if edge.weight().ts.rep() > ts {
