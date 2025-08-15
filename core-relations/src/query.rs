@@ -236,6 +236,7 @@ impl<'outer, 'a> QueryBuilder<'outer, 'a> {
         vars: &[QueryEntry],
         cs: impl IntoIterator<Item = &'b Constraint>,
     ) -> Result<AtomId, QueryError> {
+        println!("{:?} add atom:{:?}", table_id, vars);
         let info = &self.rsb.db.tables[table_id];
         let arity = info.spec.arity();
         let check_constraint = |c: &Constraint| {

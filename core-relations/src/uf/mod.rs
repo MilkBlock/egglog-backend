@@ -2,6 +2,8 @@
 
 use std::{
     any::Any,
+    fs::File,
+    io::Write,
     mem,
     sync::{Arc, Weak},
 };
@@ -9,7 +11,14 @@ use std::{
 use crossbeam_queue::SegQueue;
 use indexmap::IndexMap;
 use numeric_id::{DenseIdMap, NumericId};
-use petgraph::{algo::dijkstra, graph::NodeIndex, visit::EdgeRef, Direction, Graph};
+use petgraph::{
+    algo::dijkstra,
+    dot::{Config, Dot},
+    graph::NodeIndex,
+    prelude::StableGraph,
+    visit::EdgeRef,
+    Direction, EdgeType, Graph,
+};
 
 use crate::{
     action::ExecutionState,
@@ -237,6 +246,7 @@ impl Drop for UfBuffer {
 
 impl MutationBuffer for UfBuffer {
     fn stage_insert(&mut self, row: &[Value]) {
+        println!("STAGE insert {:?} ", row);
         self.to_insert.add_row(row);
     }
     fn stage_remove(&mut self, _: &[Value]) {
@@ -529,6 +539,14 @@ pub struct DisplacedTableWithProvenance {
     displaced: Vec<(Value, Value)>,
     buffered_writes: Arc<SegQueue<RowBuffer>>,
 }
+impl std::fmt::Debug for ProofEdge {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("ProofEdge")
+            .field("reason", &self.reason)
+            // .field("ts", &self.ts)
+            .finish()
+    }
+}
 
 #[derive(Copy, Clone, Eq, PartialEq)]
 struct ProofEdge {
@@ -663,6 +681,19 @@ impl DisplacedTableWithProvenance {
         let ts = self.timestamp_when_equal(l, r)?;
         let start = self.node_map[&l];
         let goal = self.node_map[&r];
+
+        pub fn generate_dot_by_graph<N: std::fmt::Debug, E: std::fmt::Debug, Ty: EdgeType>(
+            g: &Graph<N, E, Ty>,
+            name: String,
+            graph_config: &[Config],
+        ) {
+            let dot_name = name.clone();
+            let mut f = File::create(dot_name.clone()).unwrap();
+            let dot_string = format!("{:?}", Dot::with_config(&g, &graph_config));
+            f.write_all(dot_string.as_bytes()).expect("写入失败");
+        }
+        generate_dot_by_graph(&self.proof_graph, "proof_graph".to_string(), &[]);
+
         let costs = dijkstra(&self.proof_graph, self.node_map[&l], Some(goal), |edge| {
             if edge.weight().ts.rep() > ts {
                 // avoid edges added after the two became equal.

@@ -607,7 +607,7 @@ impl EGraph {
     }
 
     /// Get TableId by FunctionId
-    pub fn get_table_id(&self, func_id: FunctionId) -> Option<TableId>{
+    pub fn get_table_id(&self, func_id: FunctionId) -> Option<TableId> {
         Some(self.funcs.get(func_id)?.table)
     }
 
@@ -652,6 +652,7 @@ impl EGraph {
         let table_id =
             self.db
                 .add_table(table, read_deps.iter().copied(), write_deps.iter().copied());
+        println!("{} with {:?}", name, table_id);
 
         let res = self.funcs.push(FunctionInfo {
             table: table_id,

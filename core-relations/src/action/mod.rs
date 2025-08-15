@@ -515,6 +515,7 @@ impl ExecutionState<'_> {
                 }
             }
         }
+        println!("run INSTR: {:?}", inst);
 
         match inst {
             Instr::LookupOrInsertDefault {

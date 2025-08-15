@@ -52,6 +52,7 @@ impl<Value: NumericId> UnionFind<Value> {
 
     /// Merge two equivalence classes.
     pub fn union(&mut self, a: Value, b: Value) -> (Value /* parent */, Value /* child */) {
+        println!("UNION {} and {}", a.index(), b.index());
         self.reserve(a);
         self.reserve(b);
         let a = self.find(a);

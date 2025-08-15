@@ -576,6 +576,7 @@ impl Database {
             column_indexes: Default::default(),
         });
         self.deps.add_table(res, read_deps, write_deps);
+        println!("add table:{:?}", res);
         res
     }
 
