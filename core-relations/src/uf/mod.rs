@@ -531,7 +531,7 @@ pub struct DisplacedTableWithProvenance {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq)]
-struct ProofEdge {
+pub struct ProofEdge {
     reason: ProofReason,
     ts: Value,
 }
@@ -651,6 +651,10 @@ impl DisplacedTableWithProvenance {
                 panic!("did not find common id, despite the values being equivalent {l:?} / {r:?}, l_proofs={l_proofs:?}, r_proofs={r_proofs:?}")
             }
         }
+    }
+
+    pub fn get_proof_graph(&self) -> Graph<Value, ProofEdge> {
+        self.proof_graph.clone()
     }
 
     /// A simple proof generation algorithm that searches for the shortest path

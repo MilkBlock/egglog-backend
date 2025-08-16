@@ -20,7 +20,7 @@ use std::{
 use core_relations::{
     BaseValue, BaseValueId, BaseValues, ColumnId, Constraint, ContainerValue, ContainerValues,
     CounterId, Database, DisplacedTable, DisplacedTableWithProvenance, ExecutionState,
-    ExternalFunction, ExternalFunctionId, MergeVal, Offset, PlanStrategy, RuleSetReport,
+    ExternalFunction, ExternalFunctionId, MergeVal, Offset, PlanStrategy, ProofEdge, RuleSetReport,
     SortedWritesTable, TableId, TaggedRowBuffer, Value, WrappedTable,
 };
 use hashbrown::HashMap;
@@ -28,6 +28,7 @@ use indexmap::{map::Entry, IndexMap, IndexSet};
 use log::info;
 use numeric_id::{define_id, DenseIdMap, DenseIdMapWithReuse, NumericId};
 use once_cell::sync::Lazy;
+use petgraph::Graph;
 use proof_spec::{ProofReason, ProofReconstructionState, ReasonSpecId};
 use smallvec::SmallVec;
 use web_time::{Duration, Instant};
@@ -463,6 +464,24 @@ impl EGraph {
         self.db.get_table(self.funcs[table].table).len()
     }
 
+    /// return a clone of Proof Graph [`Graph<()>`] to allow more analysis
+    ///
+    /// # Errors
+    /// This method will return an error if tracing is not enabled.
+    pub fn get_proof_graph(&self) -> Result<Graph<Value, ProofEdge>> {
+        if !self.tracing {
+            return Err(ProofReconstructionError::TracingNotEnabled.into());
+        }
+        let uf_table = self
+            .db
+            .get_table(self.uf_table)
+            .as_any()
+            .downcast_ref::<DisplacedTableWithProvenance>()
+            .unwrap();
+
+        Ok(uf_table.get_proof_graph())
+    }
+
     /// Generate a proof explaining why a given term is in the database.
     ///
     /// # Errors
@@ -607,7 +626,7 @@ impl EGraph {
     }
 
     /// Get TableId by FunctionId
-    pub fn get_table_id(&self, func_id: FunctionId) -> Option<TableId>{
+    pub fn get_table_id(&self, func_id: FunctionId) -> Option<TableId> {
         Some(self.funcs.get(func_id)?.table)
     }
 
