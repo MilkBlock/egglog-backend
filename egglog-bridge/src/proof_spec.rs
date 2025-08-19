@@ -818,6 +818,9 @@ impl EGraph {
         }
     }
 
+    /// Get the values for a reason, given its id.
+    /// Here we build a rule to get the frist match with given reason id by a [`SideChannel`].
+    /// Since there might be multiple reason tables, we iterate over them by index.
     fn get_reason(&mut self, reason_id: Value) -> Vec<Value> {
         let mut atom = Vec::<DstVar>::new();
         let mut cur = 0;
